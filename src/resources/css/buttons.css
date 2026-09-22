@@ -66,3 +66,9 @@
 #button-import-list {
   background-image: var(--button-import-default);
 }
+#button-muted {
+  background-image: var(--button-filter-default);
+}
+#button-muted.button.active {
+  background-image: var(--button-filter-active);
+}

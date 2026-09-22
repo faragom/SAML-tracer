@@ -54,6 +54,7 @@ ui = {
   toggleListRowVisibility() {
     const hideResources = document.getElementById("button-hide-resources").classList.contains("active");
     const showProtocolRequestsOnly = document.getElementById("button-show-protocol-only").classList.contains("active");
+    const muteRules = window.tracer.muteRules;
 
     Array.from(document.getElementsByClassName("list-row")).forEach(row => {
       if (hideResources) {
@@ -61,13 +62,27 @@ ui = {
       } else {
         row.classList.add("show-resource");
       }
-      
+
       if (showProtocolRequestsOnly && !row.classList.contains("is-protocol")) {
         row.classList.add("non-protocol");
       } else {
         row.classList.remove("non-protocol");
       }
+
+      if (row.requestItem && muteRules.isMuted(row.requestItem.request)) {
+        row.classList.add("muted");
+      } else {
+        row.classList.remove("muted");
+      }
     });
+  },
+
+  /** Keeps the header button's count in step with the rules actually held. */
+  updateMuteButton() {
+    const ruleCount = window.tracer.muteRules.rules.length;
+    const button = document.getElementById("button-muted");
+    button.innerText = ruleCount === 0 ? "Muted" : `Muted (${ruleCount})`;
+    ui.setButtonState(button, ruleCount > 0);
   },
 
   bindButtons: function() {
@@ -110,7 +125,15 @@ ui = {
       let exportDialog = document.getElementById("exportDialog");
       exportDialog.style.visibility = "visible";
       let exportDialogContent = document.getElementById("exportDialogContent");
-      exportDialogContent.contentWindow.ui.setupContent(window.tracer.httpRequests, window.tracer.hideResources, window.tracer.showProtocolRequestsOnly);
+      // showProtocolOnly, not showProtocolRequestsOnly: the tracer never had the latter, so the
+      // export silently ignored the button it was meant to honour.
+      exportDialogContent.contentWindow.ui.setupContent(window.tracer.httpRequests, window.tracer.hideResources, window.tracer.showProtocolOnly, window.tracer.muteRules);
+    }, true);
+    document.getElementById("button-muted").addEventListener("click", () => {
+      let muteDialog = document.getElementById("muteDialog");
+      muteDialog.style.visibility = "visible";
+      let muteDialogContent = document.getElementById("muteDialogContent");
+      muteDialogContent.contentWindow.ui.setupContent(window.tracer);
     }, true);
     document.getElementById("button-import-list").addEventListener("click", () => {
       let importDialog = document.getElementById("importDialog");

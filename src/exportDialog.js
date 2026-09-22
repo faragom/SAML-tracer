@@ -23,9 +23,10 @@ ui = {
     }, true);
   },
 
-  setupContent: (httpRequests, hideResources, showProtocolRequestsOnly) => {
-    // remember the currently captured (and filtered) requests
-    filteredRequests = httpRequests?.filter(req => req.isVisible && req.isVisible(hideResources, showProtocolRequestsOnly)).map(req => req.parsed).filter(Boolean);
+  setupContent: (httpRequests, hideResources, showProtocolRequestsOnly, muteRules) => {
+    // remember the currently captured (and filtered) requests — muted entries are noise by the
+    // user's own account, so they do not belong in an export either
+    filteredRequests = httpRequests?.filter(req => req.isVisible && req.isVisible(hideResources, showProtocolRequestsOnly, muteRules)).map(req => req.parsed).filter(Boolean);
     ui.requests = filteredRequests;
 
     const displayExportableRequestCount = () => {

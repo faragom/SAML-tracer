@@ -135,6 +135,22 @@ SAMLTrace.UniqueRequestId.prototype = {
   }
 };
 
+/**
+ * Cl@ve, the Spanish eIDAS gateway, does not use the SAMLRequest/SAMLResponse parameter names the
+ * SAML 2.0 bindings define for Single Logout. Its nodes carry the message under names of their own,
+ * and a single request often repeats the same payload under two of them: the RedIRIS bridge sends
+ * `logoutRequest`/`logoutResponse`, the pasarela adds `samlRequestLogout`/`samlResponseLogout`.
+ *
+ * The payload itself is an ordinary base64-encoded SAML 2.0 LogoutRequest or LogoutResponse, so
+ * these requests are treated as SAML-P like any other; only the place to look for them differs.
+ */
+SAMLTrace.CLAVE_LOGOUT_PARAMETERS = [
+  "samlRequestLogout",
+  "logoutRequest",
+  "samlResponseLogout",
+  "logoutResponse"
+];
+
 SAMLTrace.Request = function(request, getResponse) {
   this.method = request.req.method;
   this.url = request.req.url;
@@ -257,6 +273,12 @@ SAMLTrace.Request.prototype = {
       return isInGet || isInPost;
     };
     
+    const isClaveLogout = () => {
+      let isInGet = isAnyParameterInCollection(SAMLTrace.CLAVE_LOGOUT_PARAMETERS, this.get);
+      let isInPost = isAnyParameterInCollection(SAMLTrace.CLAVE_LOGOUT_PARAMETERS, this.post);
+      return isInGet || isInPost;
+    };
+
     const isWsFederation = () => {
       // all probably relevant WS-Federation parameters -> ["wa", "wreply", "wres", "wctx", "wp", "wct", "wfed", "wencoding", "wtrealm", "wfresh", "wauth", "wreq", "whr", "wreqptr", "wresult", "wresultptr", "wattr", "wattrptr", "wpseudo", "wpseudoptr"];
       // the most common ones should suffice:
@@ -266,7 +288,7 @@ SAMLTrace.Request.prototype = {
       return isInGet || isInPost;
     };
 
-    if (isSamlProtocol()) {
+    if (isSamlProtocol() || isClaveLogout()) {
       this.protocol = "SAML-P";
     } else if (isWsFederation()) {
       this.protocol = "WS-Fed";
@@ -281,6 +303,19 @@ SAMLTrace.Request.prototype = {
     const returnValueAsIs = msg => msg;
     const returnValueB64Inflated = msg => !msg ? null : SAMLTrace.b64inflate(msg);
     const returnValueWithRemovedWhitespaceAndAtoB = msg => !msg ? null : SAMLTrace.b64DecodeUnicode(msg.replace(/\s/g, ''));
+    const returnValueClaveDecoded = msg => {
+      const encoded = msg ? msg.replace(/\s/g, '') : '';
+      if (encoded === '') {
+        return null;
+      }
+      try {
+        return SAMLTrace.b64DecodeUnicode(encoded);
+      } catch (e) {
+        // A parameter that carries something other than base64-encoded XML is not a SAML message.
+        // Returning null lets the remaining queries run instead of rejecting the whole parse.
+        return null;
+      }
+    };
 
     let queries = [];
     if (this.protocol === "SAML-P") {
@@ -292,6 +327,18 @@ SAMLTrace.Request.prototype = {
         { name: 'SAMLResponse', collection: this.post, action: returnValueWithRemovedWhitespaceAndAtoB, to: result => this.saml = result },
         { name: 'SAMLart', collection: this.post, action: returnValueAsIs, to: result => this.samlart = result }
       ];
+
+      // Cl@ve's Single Logout parameters. Only the HTTP-POST binding has been observed in the wild,
+      // where the payload is plain base64 with no deflate, exactly like SAMLRequest in a POST; the
+      // GET entries are decoded the same way so a redirect-borne message is not simply dropped.
+      // A node that repeats the payload under two names yields the same message either way, and an
+      // empty parameter — the pasarela sends one — must not be mistaken for a message.
+      SAMLTrace.CLAVE_LOGOUT_PARAMETERS.forEach(name => {
+        queries.push(
+          { name: name, collection: this.get, action: returnValueClaveDecoded, to: result => this.saml = result },
+          { name: name, collection: this.post, action: returnValueClaveDecoded, to: result => this.saml = result }
+        );
+      });
     } else if (this.protocol === "WS-Fed") {
       queries = [
         { name: 'wresult', collection: this.get, action: returnValueAsIs, to: result => this.saml = result },
@@ -437,6 +484,28 @@ SAMLTrace.RequestItem.prototype = {
       return element.querySelector(selector)?.textContent ?? '';
     }
 
+    /**
+     * Reads the text of the first descendant carrying the given local name, whatever namespace
+     * prefix the issuer chose — Cl@ve's nodes alternate between saml/samlp and saml2/saml2p even
+     * within one flow. The rows above reach for CSS selectors instead, which browsers match against
+     * an element's local name but which depend on namespace handling that is not uniform across
+     * DOM implementations; naming the local name explicitly does not.
+     */
+    function tryGetTextByLocalName(element, localName) {
+      return element.getElementsByTagNameNS('*', localName)[0]?.textContent?.trim() ?? '';
+    }
+
+    /**
+     * Joins a Status element's nested StatusCode values, outermost first, so that a failure reads
+     * as "...:Responder / ...:AuthnFailed" rather than hiding the sub-status that says what broke.
+     */
+    function getStatusCodes(element) {
+      return Array.from(element.getElementsByTagNameNS('urn:oasis:names:tc:SAML:2.0:protocol', 'StatusCode'))
+        .map(statusCode => statusCode.getAttribute('Value'))
+        .filter(Boolean)
+        .join(' / ');
+    }
+
     var parser  = new DOMParser();
     var xmldoc  = parser.parseFromString(this.request.saml, "text/xml");
 
@@ -461,8 +530,40 @@ SAMLTrace.RequestItem.prototype = {
       appendRow('Version', SamlResponse[0].getAttribute('Version'));
       appendRow('IssueInstant', SamlResponse[0].getAttribute('IssueInstant'));
       appendRow('Issuer', tryGetByQuerySelector(SamlResponse[0], 'Issuer'));
+      appendRow('StatusCode', getStatusCodes(SamlResponse[0]));
+      appendRow('StatusMessage', tryGetTextByLocalName(SamlResponse[0], 'StatusMessage'));
     }
-  
+
+    /* Check for SAML:2.0:protocol:LogoutRequest */
+    var LogoutRequest = xmldoc.getElementsByTagNameNS('urn:oasis:names:tc:SAML:2.0:protocol','LogoutRequest');
+    if (LogoutRequest.length>0) { // We found a LogoutRequest!
+      appendHeader('SAML 2.0 LogoutRequest');
+      appendRow('Destination', LogoutRequest[0].getAttribute('Destination'));
+      appendRow('ID', LogoutRequest[0].getAttribute('ID'));
+      appendRow('Version', LogoutRequest[0].getAttribute('Version'));
+      appendRow('IssueInstant', LogoutRequest[0].getAttribute('IssueInstant'));
+      appendRow('NotOnOrAfter', LogoutRequest[0].getAttribute('NotOnOrAfter'));
+      appendRow('Reason', LogoutRequest[0].getAttribute('Reason'));
+      appendRow('Issuer', tryGetTextByLocalName(LogoutRequest[0], 'Issuer'));
+      appendRow('NameID', tryGetTextByLocalName(LogoutRequest[0], 'NameID'));
+      appendRow('SessionIndex', tryGetTextByLocalName(LogoutRequest[0], 'SessionIndex'));
+    }
+
+    /* Check for SAML:2.0:protocol:LogoutResponse */
+    var LogoutResponse = xmldoc.getElementsByTagNameNS('urn:oasis:names:tc:SAML:2.0:protocol','LogoutResponse');
+    if (LogoutResponse.length>0) { // We found a LogoutResponse!
+      appendHeader('SAML 2.0 LogoutResponse');
+      appendRow('Destination', LogoutResponse[0].getAttribute('Destination'));
+      appendRow('ID', LogoutResponse[0].getAttribute('ID'));
+      appendRow('InResponseTo', LogoutResponse[0].getAttribute('InResponseTo'));
+      appendRow('Version', LogoutResponse[0].getAttribute('Version'));
+      appendRow('IssueInstant', LogoutResponse[0].getAttribute('IssueInstant'));
+      appendRow('Consent', LogoutResponse[0].getAttribute('Consent'));
+      appendRow('Issuer', tryGetTextByLocalName(LogoutResponse[0], 'Issuer'));
+      appendRow('StatusCode', getStatusCodes(LogoutResponse[0]));
+      appendRow('StatusMessage', tryGetTextByLocalName(LogoutResponse[0], 'StatusMessage'));
+    }
+
     /* Check for RequestSecurityTokenResponse */
     var SecTokResponse = xmldoc.getElementsByTagNameNS('http://docs.oasis-open.org/ws-sx/ws-trust/200512','RequestSecurityTokenResponse'); // WS-Fed + SAML1.1
     if (SecTokResponse.length === 0) {

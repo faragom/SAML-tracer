@@ -85,9 +85,41 @@ This fork carries its own add-on id (`saml-tracer-fork@faragom`) and is named
 *SAML-tracer (Cl@ve)*, so it installs alongside the published SAML-tracer rather
 than replacing it. You can run both and compare.
 
-It is not distributed through the extension stores. Build it from this
-repository and load it as a temporary add-on, or sign it for yourself through
-AMO's self-distribution.
+It is not distributed through the extension stores.
+
+### As a temporary add-on
+
+    npm ci
+    npm run assets
+
+Then open `about:debugging#/runtime/this-firefox`, choose **Load Temporary
+Add-on…** and select `manifest.json`. It is gone again on the next restart.
+
+`npm run assets` is not optional. `lib/` is deliberately empty in the
+repository — highlight.js' published files are copied in at build time so that
+what ships is byte-identical to its own distribution and a reviewer can check it
+with `npm ci` and `diff`. Skip the step and `src/hljs-init.js` resolves its
+imports to nothing, leaving the tracer working but with no syntax highlighting.
+
+### Signed, so it survives a restart
+
+    $env:WEB_EXT_API_KEY = 'user:12345678:123'
+    $env:WEB_EXT_API_SECRET = '...'
+    .\sign.ps1
+
+`sign.ps1` copies the assets, runs the tests and the linter, then signs through
+AMO's **unlisted** self-distribution channel: AMO signs the file and hands it
+back rather than publishing it, with no review queue. The credentials come from
+[AMO's API key page](https://addons.mozilla.org/en-US/developers/addon/api/key/)
+and are read from the environment only, never passed as arguments, so they stay
+out of the PowerShell history and the process list.
+
+The signed `.xpi` lands in `dist\`. Install it through `about:addons` → the gear
+icon → *Install Add-on From File…*.
+
+AMO refuses a version it has already seen, so bump `version` in `manifest.json`
+before signing again. What goes into the package is decided by
+`web-ext-config.cjs`.
 
 
 Using SAML-tracer
@@ -128,7 +160,9 @@ Developing SAML-tracer
 Clone this repository, then:
 
     npm ci
+    npm run assets      # copy highlight.js into lib/ -- see above
     npm test            # unit tests (jest)
+    npm run lint        # web-ext lint
     npm run test:e2e    # end-to-end tests (playwright, needs a display)
 
 To try your changes, load the extension as a temporary add-on, as described for

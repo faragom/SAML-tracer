@@ -1,6 +1,6 @@
 {
   "name": "saml-tracer",
-  "version": "1.9.2",
+  "version": "1.9.5",
   "description": "A debugger for viewing SAML messages",
   "scripts": {
     "test": "jest",

@@ -1,10 +1,10 @@
 {
-  "name": "SAML-tracer",
+  "name": "SAML-tracer (fork)",
   "description": "A debugger for viewing SAML messages",
   "author": "Olav Morken, Jaime Perez, Thijs Kinkhorst, Jan Köhler, Tim van Dijen, Kellen Murphy",
   "manifest_version": 3,
   "version": "1.9.5",
-  "homepage_url": "https://github.com/SimpleSAMLphp/SAML-tracer",
+  "homepage_url": "https://github.com/faragom/SAML-tracer",
   "icons": {
     "16": "src/resources/images/icon16.png",
     "32": "src/resources/images/icon32.png",
@@ -36,7 +36,7 @@
   },
   "browser_specific_settings": {
     "gecko": {
-      "id": "{d3e01ff2-9a3a-4007-8f6e-7acd9a5de263}",
+      "id": "saml-tracer-fork@faragom",
       "strict_min_version": "140.0"
     }
   },

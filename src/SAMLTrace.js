@@ -694,6 +694,22 @@ SAMLTrace.RequestItem.prototype = {
       }
     }
 
+    // "Hide entries like this one": derives a rule from this very request, so the user points at
+    // the noise rather than describing it. Kept out of the row's own click handling, which selects.
+    const muteButton = document.createElement("div");
+    muteButton.classList.add("row-mute");
+    muteButton.title = "Hide entries like this one";
+    muteButton.addEventListener("click", e => {
+      e.stopPropagation();
+      let tracer = SAMLTrace.TraceWindow.instance();
+      tracer.muteRequestsLike(this.request);
+    }, false);
+    hbox.appendChild(muteButton);
+
+    if (SAMLTrace.TraceWindow.instance().muteRules.isMuted(this.request)) {
+      hbox.classList.add("muted");
+    }
+
     hbox.requestItem = this;
     target.appendChild(hbox);
     return hbox;
@@ -709,6 +725,7 @@ SAMLTrace.TraceWindow = function() {
   this.hideResources = true;
   this.showProtocolOnly = false;
   this.colorizeRequests = true;
+  this.muteRules = new MuteRules.Store();
 };
 
 SAMLTrace.TraceWindow.prototype = {
@@ -814,10 +831,26 @@ SAMLTrace.TraceWindow.prototype = {
     this.colorizeRequests = colorizeRequests;
   },
 
+  /** Mutes the endpoint a request came from, then re-applies every rule to the rows on screen. */
+  'muteRequestsLike' : function(request) {
+    const rule = MuteRules.describe(request, MuteRules.ENDPOINT);
+    if (!this.muteRules.add(rule)) {
+      return;
+    }
+    this.muteRules.save();
+    this.applyMuteRules();
+  },
+
+  'applyMuteRules' : function() {
+    ui.toggleListRowVisibility();
+    ui.updateMuteButton();
+    this.updateStatusBar();
+  },
+
   'updateStatusBar' : function() {
     let hiddenElementsString = "";
-    if (this.hideResources || this.showProtocolOnly) {
-      const invisibleItems = this.httpRequests.filter(req => (req.isVisible && !req.isVisible(this.hideResources, this.showProtocolOnly)));
+    if (this.hideResources || this.showProtocolOnly || this.muteRules.rules.length > 0) {
+      const invisibleItems = this.httpRequests.filter(req => (req.isVisible && !req.isVisible(this.hideResources, this.showProtocolOnly, this.muteRules)));
       hiddenElementsString = ` (${invisibleItems.length} hidden)`;
     }
     
@@ -908,10 +941,22 @@ SAMLTrace.TraceWindow.prototype = {
       }
 
       entry.res = response;
-      entry.isVisible = function(hideResources, showProtocolRequestsOnly) {
+
+      // Tracing live traffic hands addRequestItem() the list entry itself, so the entry already
+      // carries its parsed form. An import hands it the pseudo-request the entry merely wraps, and
+      // the entry would never learn it — leaving isVisible() below with nothing to judge, so no
+      // hidden count and no protocol filter, and leaving the export dialog to drop every row on its
+      // .map(req => req.parsed).filter(Boolean). By here the entry has been resolved by id, so this
+      // is the one place both paths can be brought into line.
+      if (!entry.parsed && entry.req && entry.req.parsed) {
+        entry.parsed = entry.req.parsed;
+      }
+
+      entry.isVisible = function(hideResources, showProtocolRequestsOnly, muteRules) {
         const isHiddenByResource = hideResources && entry.isResource;
-        const isHiddenByProtocol = showProtocolRequestsOnly && !entry.parsed?.protocol;      
-        return !(isHiddenByResource || isHiddenByProtocol);
+        const isHiddenByProtocol = showProtocolRequestsOnly && !entry.parsed?.protocol;
+        const isHiddenByMuteRule = muteRules ? muteRules.isMuted(entry.parsed) : false;
+        return !(isHiddenByResource || isHiddenByProtocol || isHiddenByMuteRule);
       };
 
       // layout update: apply style to item based on responseStatus
@@ -1034,6 +1079,9 @@ SAMLTrace.TraceWindow.prototype = {
 SAMLTrace.TraceWindow.init = function() {
   var browser = browser || chrome;
   let traceWindow = new SAMLTrace.TraceWindow();
+
+  // Mute rules outlive the window: the endpoints that drown a trace are the same ones next time.
+  traceWindow.muteRules.load().then(() => traceWindow.applyMuteRules());
 
   browser.webRequest.onBeforeRequest.addListener(
     traceWindow.saveNewRequest,

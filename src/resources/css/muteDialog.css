@@ -1,0 +1,32 @@
+.hint {
+  color: var(--color-text);
+  opacity: 0.8;
+  max-width: 46em;
+}
+
+#mute-rules {
+  border-collapse: collapse;
+  min-width: 40em;
+}
+
+#mute-rules td {
+  padding: 3px 12px 3px 0;
+  border-bottom: 1px solid var(--color-border);
+  vertical-align: middle;
+}
+
+.mute-label {
+  font-family: monospace;
+  white-space: nowrap;
+}
+
+.mute-count {
+  white-space: nowrap;
+  opacity: 0.7;
+}
+
+.mute-actions {
+  display: flex;
+  justify-content: flex-end;
+  border-bottom: none;
+}

@@ -199,6 +199,9 @@ a.tab.selected:hover {
 .list-row.non-protocol {
   display: none;
 }
+.list-row.muted {
+  display: none;
+}
 
 .request-method {
   flex: 0 0 5em;
@@ -206,8 +209,10 @@ a.tab.selected:hover {
 }
 
 .request-url {
-  /* full width minus HTTP-method width minus SAML- and WS-Fed-logo */
-  width: calc(100% - 5em - 40px - 56px);
+  /* full width minus HTTP-method width, the logos and the mute button */
+  width: calc(100% - 5em - 40px - 56px - 20px);
+  /* pushes whatever follows to the right edge, logo present or not */
+  margin-right: auto;
 }
 
 .request-info {
@@ -230,14 +235,12 @@ a.tab.selected:hover {
 }
 
 .saml-logo {
-  margin-left: auto;
   display: block;
   width: 40px;
   height: 14px;
   background: url("../images/saml.png") no-repeat center/cover;
 }
 .ws-fed-logo {
-  margin-left: auto;
   display: block;
   width: 56px;
   height: 14px;
@@ -256,4 +259,26 @@ a.tab.selected:hover {
 
 #summary table td {
   padding: 0 10px;
+}
+
+/* "Hide entries like this one". Kept hidden rather than removed until the row is hovered, so the
+   rows do not shift as the pointer travels down the list. */
+.row-mute {
+  flex: 0 0 20px;
+  align-self: center;
+  height: 14px;
+  line-height: 14px;
+  text-align: center;
+  cursor: pointer;
+  visibility: hidden;
+  opacity: 0.6;
+}
+.row-mute::before {
+  content: "\2715";
+}
+.list-row:hover .row-mute {
+  visibility: visible;
+}
+.row-mute:hover {
+  opacity: 1;
 }

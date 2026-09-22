@@ -15,6 +15,7 @@
             <div id="button-autoscroll" class="button with-icon active">Autoscroll</div>
             <div id="button-hide-resources" class="button with-icon active">Hide resources</div>
             <div id="button-show-protocol-only" class="button with-icon">Show protocol requests only</div>
+            <div id="button-muted" class="button with-icon">Muted</div>
             <div id="button-colorize" class="button with-icon active">Colorize</div>
             <div id="button-export-list" class="button with-icon">Export</div>
             <div id="button-import-list" class="button with-icon">Import</div>
@@ -37,10 +38,17 @@
                 <iframe id="importDialogContent" src="importDialog.html" class="modal-content"></iframe>
             </div>
         </div>
+        <div id="muteDialog" class="modal">
+            <div class="modal-inner">
+                <div class="modal-close"></div>
+                <iframe id="muteDialogContent" src="muteDialog.html" class="modal-content"></iframe>
+            </div>
+        </div>
 
         <script type="module" src="hljs-init.js"></script>
         <script type="text/javascript" src="splitter.js"></script>
         <script type="text/javascript" src="hash.js"></script>
+        <script type="text/javascript" src="muteRules.js"></script>
         <script type="text/javascript" src="SAMLTrace.js"></script>
         <script type="text/javascript" src="ui.js"></script>
         <script type="text/javascript" src="scrollableList.js"></script>

@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <title>Muted entries</title>
+  <link rel="stylesheet" href="resources/css/samltrace.css" type="text/css">
+  <link rel="stylesheet" href="resources/css/buttons.css" type="text/css">
+  <link rel="stylesheet" href="resources/css/dialog.css" type="text/css">
+  <link rel="stylesheet" href="resources/css/muteDialog.css" type="text/css">
+</head>
+
+<body class="not-selectable">
+  <div class="title row-space">Muted entries</div>
+  <div class="hint row-space">
+    Entries matching a rule below are hidden from the list and left out of exports.
+    The query string is never part of a rule.
+  </div>
+
+  <table id="mute-rules" class="is-selectable"></table>
+  <div id="mute-empty" class="hint">Nothing is muted. Use the button at the end of a row to hide entries like it.</div>
+
+  <div class="bottomRow">
+    <a id="button-unmute-all" class="button">Unmute all</a>
+  </div>
+
+  <script type="text/javascript" src="muteRules.js"></script>
+  <script type="text/javascript" src="muteDialog.js"></script>
+</body>
+
+</html>
